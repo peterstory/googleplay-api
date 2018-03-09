@@ -354,6 +354,8 @@ class GooglePlayAPI(object):
                 output += list(map(utils.fromDocToDictionary, apps))
                 remaining -= len(apps)
             else:
+                # We don't want to simply re-issue this request, because we
+                # might be in an infinite loop, and Google might rate limit us.
                 raise RequestError(
                     "Invalid response payload: {0}".format(response.payload))
 
