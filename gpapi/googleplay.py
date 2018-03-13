@@ -12,7 +12,6 @@ from requests.packages.urllib3.util.retry import Retry
 from base64 import b64decode, urlsafe_b64encode
 from itertools import chain
 from datetime import datetime
-import time
 
 from . import googleplay_pb2, config, utils
 
