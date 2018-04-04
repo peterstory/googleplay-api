@@ -24,8 +24,6 @@ CHECKINURL = BASE + "checkin"
 AUTHURL = BASE + "auth"
 LOGURL = FDFE + "log"
 TOCURL = FDFE + "toc"
-# Google returns this message if they are rate-limiting us
-SLOW_MSG = b'<html><body><h1>429 Too Many Requests</h1><p>Please reduce your request rate.</p></body></html>\n'
 
 
 class LoginError(Exception):
@@ -280,30 +278,19 @@ class GooglePlayAPI(object):
             content_type = "application/x-www-form-urlencoded; charset=UTF-8"
         headers["Content-Type"] = content_type
         url = FDFE + path
-
-        # Exponential backoff if Google tries to rate-limit us
-        backoff = 0.1
-        # Until we get a legitimate response
-        while True:
-            if post_data is not None:
-                response = requests.post(url,
-                                         data=str(post_data),
-                                         headers=headers,
-                                         verify=ssl_verify,
-                                         timeout=60,
-                                         proxies=self.proxies_config)
-            else:
-                response = requests.get(url,
-                                        headers=headers,
-                                        verify=ssl_verify,
-                                        timeout=60,
-                                        proxies=self.proxies_config)
-            if response.content == SLOW_MSG:
-                backoff *= 1.5
-                time.sleep(backoff)
-            else:
-                # We have a legitimate response
-                break
+        if post_data is not None:
+            response = requests.post(url,
+                                     data=str(post_data),
+                                     headers=headers,
+                                     verify=ssl_verify,
+                                     timeout=60,
+                                     proxies=self.proxies_config)
+        else:
+            response = requests.get(url,
+                                    headers=headers,
+                                    verify=ssl_verify,
+                                    timeout=60,
+                                    proxies=self.proxies_config)
 
         message = googleplay_pb2.ResponseWrapper.FromString(response.content)
         if message.commands.displayErrorMessage != "":
