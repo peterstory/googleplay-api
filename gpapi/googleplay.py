@@ -7,8 +7,6 @@ from Crypto.Hash import SHA
 from Crypto.Cipher import PKCS1_OAEP
 
 import requests
-from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.util.retry import Retry
 from base64 import b64decode, urlsafe_b64encode
 from itertools import chain
 from datetime import datetime
@@ -26,34 +24,8 @@ CHECKINURL = BASE + "checkin"
 AUTHURL = BASE + "auth"
 LOGURL = FDFE + "log"
 TOCURL = FDFE + "toc"
-
-def requests_retry_session(
-    retries=10,
-    backoff_factor=0.3,
-    # Note the presence of POST, which is a little dangerous
-    method_whitelist=('HEAD', 'TRACE', 'GET', 'POST', 'PUT', 'OPTIONS', 'DELETE'),
-    status_forcelist=(400, 429),
-    session=None,
-):
-    """
-    Google may rate limit us if we issue too many requests. I've observed both
-    400 and 429 HTTP codes when Google is performing rate limiting. If we
-    encounter those codes, we should retry the request after a short delay.
-    Based on:
-    https://www.peterbe.com/plog/best-practice-with-retries-with-requests
-    """
-    session = session or requests.Session()
-    retry = Retry(
-        total=retries,
-        read=retries,
-        connect=retries,
-        backoff_factor=backoff_factor,
-        status_forcelist=status_forcelist,
-    )
-    adapter = HTTPAdapter(max_retries=retry)
-    session.mount('http://', adapter)
-    session.mount('https://', adapter)
-    return session
+# Google returns this message if they are rate-limiting us
+SLOW_MSG = b'<html><body><h1>429 Too Many Requests</h1><p>Please reduce your request rate.</p></body></html>\n'
 
 
 class LoginError(Exception):
@@ -144,11 +116,9 @@ class GooglePlayAPI(object):
         request = self.deviceBuilder.getAndroidCheckinRequest()
 
         stringRequest = request.SerializeToString()
-        res = requests_retry_session().post(CHECKINURL,
-                                            data=stringRequest,
-                                            headers=headers,
-                                            verify=ssl_verify,
-                                            proxies=self.proxies_config)
+        res = requests.post(CHECKINURL, data=stringRequest,
+                            headers=headers, verify=ssl_verify,
+                            proxies=self.proxies_config)
         response = googleplay_pb2.AndroidCheckinResponse()
         response.ParseFromString(res.content)
 
@@ -160,11 +130,9 @@ class GooglePlayAPI(object):
         request2.accountCookie.append("[" + email + "]")
         request2.accountCookie.append(ac2dmToken)
         stringRequest = request2.SerializeToString()
-        requests_retry_session().post(CHECKINURL,
-                                      data=stringRequest,
-                                      headers=headers,
-                                      verify=ssl_verify,
-                                      proxies=self.proxies_config)
+        requests.post(CHECKINURL, data=stringRequest,
+                      headers=headers, verify=ssl_verify,
+                      proxies=self.proxies_config)
 
         return response.androidId
 
@@ -180,12 +148,11 @@ class GooglePlayAPI(object):
         headers["X-DFE-SmallestScreenWidthDp"] = "320"
         headers["X-DFE-Filter-Level"] = "3"
         stringRequest = upload.SerializeToString()
-        response = requests_retry_session().post(UPLOADURL,
-                                                 data=stringRequest,
-                                                 headers=headers,
-                                                 verify=ssl_verify,
-                                                 timeout=60,
-                                                 proxies=self.proxies_config)
+        response = requests.post(UPLOADURL, data=stringRequest,
+                                 headers=headers,
+                                 verify=ssl_verify,
+                                 timeout=60,
+                                 proxies=self.proxies_config)
         response = googleplay_pb2.ResponseWrapper.FromString(response.content)
         try:
             if response.payload.HasField('uploadDeviceConfigResponse'):
@@ -214,11 +181,8 @@ class GooglePlayAPI(object):
             params['callerPkg'] = 'com.google.android.gms'
             headers = self.deviceBuilder.getAuthHeaders(self.gsfId)
             headers['app'] = 'com.google.android.gsm'
-            response = requests_retry_session().post(
-                AUTHURL,
-                data=params,
-                verify=ssl_verify,
-                proxies=self.proxies_config)
+            response = requests.post(AUTHURL, data=params, verify=ssl_verify,
+                                     proxies=self.proxies_config)
             data = response.text.split()
             params = {}
             for d in data:
@@ -255,11 +219,11 @@ class GooglePlayAPI(object):
         requestParams['app'] = 'com.android.vending'
         headers = self.deviceBuilder.getAuthHeaders(self.gsfId)
         headers['app'] = 'com.android.vending'
-        response = requests_retry_session().post(AUTHURL,
-                                                 data=requestParams,
-                                                 verify=ssl_verify,
-                                                 headers=headers,
-                                                 proxies=self.proxies_config)
+        response = requests.post(AUTHURL,
+                                 data=requestParams,
+                                 verify=ssl_verify,
+                                 headers=headers,
+                                 proxies=self.proxies_config)
         data = response.text.split()
         params = {}
         for d in data:
@@ -288,11 +252,11 @@ class GooglePlayAPI(object):
         params.pop('EncryptedPasswd')
         headers = self.deviceBuilder.getAuthHeaders(self.gsfId)
         headers['app'] = 'com.android.vending'
-        response = requests_retry_session().post(AUTHURL,
-                                                 data=params,
-                                                 headers=headers,
-                                                 verify=ssl_verify,
-                                                 proxies=self.proxies_config)
+        response = requests.post(AUTHURL,
+                                 data=params,
+                                 headers=headers,
+                                 verify=ssl_verify,
+                                 proxies=self.proxies_config)
         data = response.text.split()
         params = {}
         for d in data:
@@ -317,21 +281,29 @@ class GooglePlayAPI(object):
         headers["Content-Type"] = content_type
         url = FDFE + path
 
-        if post_data is not None:
-            response = requests_retry_session().post(
-                url,
-                data=str(post_data),
-                headers=headers,
-                verify=ssl_verify,
-                timeout=60,
-                proxies=self.proxies_config)
-        else:
-            response = requests_retry_session().get(
-                url,
-                headers=headers,
-                verify=ssl_verify,
-                timeout=60,
-                proxies=self.proxies_config)
+        # Exponential backoff if Google tries to rate-limit us
+        backoff = 0.1
+        # Until we get a legitimate response
+        while True:
+            if post_data is not None:
+                response = requests.post(url,
+                                         data=str(post_data),
+                                         headers=headers,
+                                         verify=ssl_verify,
+                                         timeout=60,
+                                         proxies=self.proxies_config)
+            else:
+                response = requests.get(url,
+                                        headers=headers,
+                                        verify=ssl_verify,
+                                        timeout=60,
+                                        proxies=self.proxies_config)
+            if response.content == SLOW_MSG:
+                backoff *= 1.5
+                time.sleep(backoff)
+            else:
+                # We have a legitimate response
+                break
 
         message = googleplay_pb2.ResponseWrapper.FromString(response.content)
         if message.commands.displayErrorMessage != "":
@@ -534,13 +506,10 @@ class GooglePlayAPI(object):
 
     def _deliver_data(self, url, cookies):
         headers = self.getDefaultHeaders()
-        response = requests_retry_session().get(url,
-                                                headers=headers,
-                                                cookies=cookies,
-                                                verify=ssl_verify,
-                                                stream=True,
-                                                timeout=60,
-                                                proxies=self.proxies_config)
+        response = requests.get(url, headers=headers,
+                                cookies=cookies, verify=ssl_verify,
+                                stream=True, timeout=60,
+                                proxies=self.proxies_config)
         total_size = response.headers.get('content-length')
         chunk_size = 32 * (1 << 10)
         return {'data': response.iter_content(chunk_size=chunk_size),
@@ -582,12 +551,10 @@ class GooglePlayAPI(object):
         if downloadToken is not None:
             params['dtok'] = downloadToken
         url = "https://android.clients.google.com/fdfe/%s" % path
-        response = requests_retry_session().get(url,
-                                                headers=headers,
-                                                params=params,
-                                                verify=ssl_verify,
-                                                timeout=60,
-                                                proxies=self.proxies_config)
+        response = requests.get(url, headers=headers,
+                                params=params, verify=ssl_verify,
+                                timeout=60,
+                                proxies=self.proxies_config)
         response = googleplay_pb2.ResponseWrapper.FromString(response.content)
         if response.commands.displayErrorMessage != "":
             raise RequestError(response.commands.displayErrorMessage)
@@ -650,12 +617,10 @@ class GooglePlayAPI(object):
                   'vc': str(versionCode)}
         url = FDFE + path
         self.log(packageName)
-        response = requests_retry_session().post(url,
-                                                 headers=headers,
-                                                 params=params,
-                                                 verify=ssl_verify,
-                                                 timeout=60,
-                                                 proxies=self.proxies_config)
+        response = requests.post(url, headers=headers,
+                                 params=params, verify=ssl_verify,
+                                 timeout=60,
+                                 proxies=self.proxies_config)
 
         response = googleplay_pb2.ResponseWrapper.FromString(response.content)
         if response.commands.displayErrorMessage != "":
@@ -672,13 +637,12 @@ class GooglePlayAPI(object):
         log_request.timestamp = timestamp
 
         string_request = log_request.SerializeToString()
-        response = requests_retry_session().post(
-            LOGURL,
-            data=string_request,
-            headers=self.getDefaultHeaders(),
-            verify=ssl_verify,
-            timeout=60,
-            proxies=self.proxies_config)
+        response = requests.post(LOGURL,
+                                 data=string_request,
+                                 headers=self.getDefaultHeaders(),
+                                 verify=ssl_verify,
+                                 timeout=60,
+                                 proxies=self.proxies_config)
         response = googleplay_pb2.ResponseWrapper.FromString(response.content)
         if response.commands.displayErrorMessage != "":
             raise RequestError(response.commands.displayErrorMessage)
