@@ -10,6 +10,7 @@ import requests
 from base64 import b64decode, urlsafe_b64encode
 from itertools import chain
 from datetime import datetime
+import time
 
 from . import googleplay_pb2, config, utils
 
@@ -327,8 +328,7 @@ class GooglePlayAPI(object):
                 # we still need to fetch the first page, so go to
                 # next loop iteration without decrementing counter
                 nextPath = response.payload.searchResponse.nextPageUrl
-                continue
-            if utils.hasListResponse(response.payload):
+            elif utils.hasListResponse(response.payload):
                 cluster = response.payload.listResponse.cluster
                 if len(cluster) == 0:
                     # strange behaviour, probably due to expired token
@@ -344,6 +344,11 @@ class GooglePlayAPI(object):
                 apps = list(chain.from_iterable([doc.child for doc in cluster.doc]))
                 output += list(map(utils.fromDocToDictionary, apps))
                 remaining -= len(apps)
+            else:
+                # We don't want to simply re-issue this request, because we
+                # might be in an infinite loop, and Google might rate limit us.
+                raise RequestError(
+                    "Invalid response payload: {0}".format(response.payload))
 
         if len(output) > nb_result:
             output = output[:nb_result]
