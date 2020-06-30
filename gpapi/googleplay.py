@@ -311,49 +311,17 @@ class GooglePlayAPI(object):
         if self.authSubToken is None:
             raise Exception("You need to login before executing any request")
 
-        remaining = nb_result
-        output = []
+        path = SEARCHURL + "?c=3&q={}".format(requests.utils.quote(query))
+        # self.toc()
 
-        nextPath = "search?c=3&q=%s" % requests.utils.quote(query)
-        if (offset is not None):
-            nextPath += "&o=%d" % int(offset)
-        while remaining > 0 and nextPath is not None:
-            currentPath = nextPath
-            data = self.executeRequestApi2(currentPath)
-            if utils.hasPrefetch(data):
-                response = data.preFetch[0].response
-            else:
-                response = data
-            if utils.hasSearchResponse(response.payload):
-                # we still need to fetch the first page, so go to
-                # next loop iteration without decrementing counter
-                nextPath = response.payload.searchResponse.nextPageUrl
-            elif utils.hasListResponse(response.payload):
-                cluster = response.payload.listResponse.cluster
-                if len(cluster) == 0:
-                    # strange behaviour, probably due to expired token
-                    raise LoginError('Unexpected behaviour, probably expired '
-                                     'token')
-                cluster = cluster[0]
-                if len(cluster.doc) == 0:
-                    break
-                if cluster.doc[0].containerMetadata.nextPageUrl != "":
-                    nextPath = cluster.doc[0].containerMetadata.nextPageUrl
-                else:
-                    nextPath = None
-                apps = list(chain.from_iterable([doc.child for doc in cluster.doc]))
-                output += list(map(utils.fromDocToDictionary, apps))
-                remaining -= len(apps)
-            else:
-                # We don't want to simply re-issue this request, because we
-                # might be in an infinite loop, and Google might rate limit us.
-                raise RequestError(
-                    "Invalid response payload: {0}".format(response.payload))
+        data = self.executeRequestApi2(path)
 
-        if len(output) > nb_result:
-            output = output[:nb_result]
-
-        return output
+        if utils.hasPrefetch(data):
+            response = data.preFetch[0].response
+        else:
+            response = data
+        resIterator = response.payload.listResponse.doc
+        return list(map(utils.parseProtobufObj, resIterator))
 
     def details(self, packageName):
         """Get app details from a package name.

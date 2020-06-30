@@ -4,6 +4,9 @@ from . import googleplay_pb2
 
 VERSION = sys.version_info[0]
 
+def parseProtobufObj(obj):
+    return MessageToDict(obj, False, False, False)
+
 def fromDocToDictionary(app):
     return {"docId": app.docid,
             "title": app.title,
