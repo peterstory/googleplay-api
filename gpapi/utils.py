@@ -1,13 +1,7 @@
 import struct
 import sys
-from google.protobuf.message import Message
-from google.protobuf.json_format import MessageToDict
-from . import googleplay_pb2
 
 VERSION = sys.version_info[0]
-
-def parseProtobufObj(obj):
-    return MessageToDict(obj, False, False, False)
 
 def readInt(byteArray, start):
     """Read the byte array, starting from *start* position,

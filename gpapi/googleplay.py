@@ -10,7 +10,7 @@ import requests
 from base64 import b64decode, urlsafe_b64encode
 from itertools import chain
 from datetime import datetime
-import time
+from google.protobuf.json_format import MessageToDict
 
 from . import googleplay_pb2, config, utils
 
@@ -327,7 +327,7 @@ class GooglePlayAPI(object):
         else:
             response = data
         resIterator = response.payload.listResponse.doc
-        return list(map(utils.parseProtobufObj, resIterator))
+        return list(map(MessageToDict, resIterator))
 
     def details(self, packageName):
         """Get app details from a package name.
@@ -335,7 +335,7 @@ class GooglePlayAPI(object):
         packageName is the app unique ID (usually starting with 'com.')."""
         path = DETAILSURL + "?doc={}".format(requests.utils.quote(packageName))
         data = self.executeRequestApi2(path)
-        return utils.parseProtobufObj(data.payload.detailsResponse.docV2)
+        return MessageToDict(data.payload.detailsResponse.docV2)
 
     def bulkDetails(self, packageNames):
         """Get several apps details from a list of package names.
