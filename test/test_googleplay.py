@@ -27,10 +27,22 @@ class TestGooglePlay(unittest.TestCase):
         # Search for 'firefox', requesting just 1 result
         results = self.API.search('firefox', 1)
         self.assertTrue(len(results), 1)
-        result = results[0]
-        # Check that the legit Firefox app was found
-        self.assertEqual(result['docId'], 'org.mozilla.firefox')
-        # TODO Add assertions for each of the attributes which the rest of our
-        # code depends on. For now, I think this is the only attribute we
-        # depend on.
-        self.assertIn('versionCode', result)
+        # The search can return strange results, so we simply check that it
+        # contains some data
+        self.assertIn('child', results[0])
+
+    def test_details(self):
+        # Get the app details for 'airbnb'
+        details = self.API.details('com.airbnb.android')
+        # Check if the information in the app details is not none
+        self.assertEqual(
+            details['details']['appDetails']['developerName'],
+            'Airbnb')
+
+    def test_download(self):
+        # The method we use to download the APK depends on whether the
+        # app has already been "purchased". We've already "purchased" (aka,
+        # downloaded) this app, so we simply call the download() method.
+        # Otherwise, we would use the delivery() method.
+        dl_data = self.API.download('com.airbnb.android')
+        self.assertIsNotNone(next(dl_data['file']['data']))
