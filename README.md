@@ -1,13 +1,6 @@
-# Google play python API [![Build Status](https://travis-ci.org/NoMore201/googleplay-api.svg?branch=master)](https://travis-ci.org/NoMore201/googleplay-api)
+# Google Play Python API
 
-This project contains an unofficial API for google play interactions. The code mainly comes from
-[GooglePlayAPI project](https://github.com/egirault/googleplay-api/) which is not
-maintained anymore. The code was updated with some important changes:
-
-* ac2dm authentication with checkin and device info upload
-* updated search and download calls
-* select the device you want to fake from a list of pre-defined values (check `device.properties`)
-(defaults to a OnePlus One)
+This code is a minimal fork of [NoMore201/googleplay-api](https://github.com/NoMore201/googleplay-api). The main functionality we maintain is the ability to download apps.
 
 # Usage
 Check `test.py` for a simple example.
@@ -49,4 +42,12 @@ export EMAIL='XXX'
 export PASSWORD='XXX'
 export GSFID='XXX'
 python -m pytest -v
+```
+
+# Maintenance
+
+As Google updates the Google Play Store API, it might be necessary to periodically update the protobuf definition. First, update `googleplay.proto` from the upstream repo, `NoMore201/googleplay-api`. Next, [download a recent version of the protobuf compiler, protoc](https://github.com/protocolbuffers/protobuf/releases/). Finally, use the compiler to update `gpapi/googleplay_pb2.py`:
+
+```
+protoc --proto_path . --python_out gpapi googleplay.proto
 ```
