@@ -45,4 +45,4 @@ class TestGooglePlay(unittest.TestCase):
         # downloaded) this app, so we simply call the download() method.
         # Otherwise, we would use the delivery() method.
         dl_data = self.API.download('com.airbnb.android')
-        self.assertGreater(len(dl_data['file']['data']), 0)
+        self.assertIsNotNone(next(dl_data['file']['data']))
