@@ -34,3 +34,24 @@ class TestGooglePlay(unittest.TestCase):
         # code depends on. For now, I think this is the only attribute we
         # depend on.
         self.assertIn('versionCode', result)
+
+    def test_details(self):
+        # Get the app details for 'airbnb'
+        details = self.API.details('com.airbnb.android')
+        app_details = details.get('details').get('appDetails')
+        # Check if the information in the app details is not none
+        self.assertIsNotNone(app_details)
+
+    def test_download(self):
+        # The method we use to download the APK depends on whether the
+        # app has already been "purchased"
+
+        # Download airbnb and check if it returns a dictionary
+        # containing apk data and a list of expansion files.
+        details = api.details('com.airbnb.android')
+        if ((len(details['offer']) > 0) and
+                (details['offer'][0]['checkoutFlowRequired'])):
+            dl_data = api.delivery(package_id)
+        else:
+            dl_data = api.download(package_id)
+        self.assertIsNotNone(dl_data)
