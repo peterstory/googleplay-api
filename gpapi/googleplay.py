@@ -215,7 +215,7 @@ class GooglePlayAPI(object):
             self.gsfId = gsfId
             self.setAuthSubToken(authSubToken)
             # check if token is valid with a simple search
-            self.search('firefox', 1, None)
+            self.search('drv')
         else:
             raise LoginError('Either (email,pass) or (gsfId, authSubToken) is needed')
 
@@ -307,7 +307,7 @@ class GooglePlayAPI(object):
 
         return message
 
-    def search(self, query, nb_result, offset=None):
+    def search(self, query):
         """ Search the play store for an app.
 
         nb_result is the maximum number of result to be returned.
