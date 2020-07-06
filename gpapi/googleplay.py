@@ -115,26 +115,6 @@ class GooglePlayAPI(object):
             headers["X-DFE-Cookie"] = self.dfeCookie
         return headers
 
-    def getDefaultHeaders(self):
-        """Return the default set of request headers, which
-        can later be expanded, based on the request type"""
-
-        headers = {"Accept-Language": self.deviceBuilder.locale.replace('_', '-'),
-                   "X-DFE-Encoded-Targets": config.DFE_TARGETS,
-                   "User-Agent": self.deviceBuilder.getUserAgent(),
-                   "X-DFE-Client-Id": "am-android-google",
-                   "X-DFE-MCCMNC": self.deviceBuilder.device.get('celloperator'),
-                   "X-DFE-Network-Type": "4",
-                   "X-DFE-Content-Filters": "",
-                   "X-DFE-Request-Params": "timeoutMs=4000"}
-        if self.gsfId is not None:
-            headers["X-DFE-Device-Id"] = "{0:x}".format(self.gsfId)
-        if self.authSubToken is not None:
-            headers["Authorization"] = "GoogleLogin auth=%s" % self.authSubToken
-        if self.device_config_token is not None:
-            headers["X-DFE-Device-Config-Token"] = self.device_config_token
-        return headers
-
     def checkin(self, email, ac2dmToken):
         headers = self.getHeaders()
         headers["Content-Type"] = "application/x-protobuffer"
